@@ -33,3 +33,10 @@ go.work.sum
 
 data/
 data2/
+
+venv/
+__pycache__/
+*.pyc
+random-image
+generated_images
+env

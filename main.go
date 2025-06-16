@@ -15,8 +15,8 @@ import (
 
 func main() {
 	app := cli.NewApp()
-	app.Name = "Random Image Generator"
-	app.Usage = "Generate random images with various options"
+	app.Name = "Image Generator"
+	app.Usage = "Generate images with noise"
 	app.Version = "1.0.0"
 	app.Commands = []*cli.Command{
 		generateCommand,
@@ -24,7 +24,8 @@ func main() {
 
 	err := app.Run(os.Args)
 	if err != nil {
-		cli.HandleExitCoder(err)
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
 		return
 	}
 }
@@ -34,12 +35,12 @@ var generateCommand = &cli.Command{
 	Aliases: []string{"g"},
 	Usage:   "Generate random images",
 	Flags: []cli.Flag{
-		&cli.IntFlag{
-			Name:    "count",
-			Aliases: []string{"c"},
-			Usage:   "Number of images to generate",
-			Value:   100,
-		},
+		// &cli.IntFlag{
+		// 	Name:    "count",
+		// 	Aliases: []string{"c"},
+		// 	Usage:   "Number of images to generate",
+		// 	Value:   100,
+		// },
 		&cli.StringFlag{
 			Name:    "output",
 			Aliases: []string{"o"},
@@ -47,8 +48,9 @@ var generateCommand = &cli.Command{
 			Value:   "./data",
 		},
 		&cli.StringFlag{
-			Name:  "source-dir",
-			Usage: "Directory containing source images for generation",
+			Name:     "source-dir",
+			Usage:    "Directory containing source images for generation",
+			Required: true,
 		},
 		&cli.IntFlag{
 			Name:    "width",
@@ -58,7 +60,7 @@ var generateCommand = &cli.Command{
 		},
 	},
 	Action: func(c *cli.Context) error {
-		count := c.Int("count")
+		// count := c.Int("count")
 		outputDir := c.String("output")
 		sourceDir := c.String("source-dir")
 		width := c.Int("width")
@@ -67,8 +69,7 @@ var generateCommand = &cli.Command{
 		// 设置随机种子
 		rand.New(rand.NewSource(time.Now().UnixNano()))
 
-		fmt.Printf("Generating %d random images in directory: %s, source directory: %v\n",
-			count, outputDir, sourceDir)
+		fmt.Printf("output directory: %s, source directory: %v\n", outputDir, sourceDir)
 
 		fi, err := os.Stat(outputDir)
 		if err != nil {
@@ -85,40 +86,38 @@ var generateCommand = &cli.Command{
 			return fmt.Errorf("output path is not a directory: %s", outputDir)
 		}
 
-		for i := range count {
+		// 从源目录中随机选择一张图片进行处理
+		files, err := os.ReadDir(sourceDir)
+		if err != nil {
+			return fmt.Errorf("failed to read source directory: %v", err)
+		}
+		if len(files) == 0 {
+			return fmt.Errorf("source directory is empty: %s", sourceDir)
+		}
+		for _, f := range files {
 			// 生成随机图片
-			outputPath := fmt.Sprintf("%s/random_image_%d.png", outputDir, i+1)
-			if len(sourceDir) > 0 {
-				// 从源目录中随机选择一张图片进行处理
-				files, err := os.ReadDir(sourceDir)
-				if err != nil {
-					return fmt.Errorf("failed to read source directory: %v", err)
-				}
-				if len(files) == 0 {
-					return fmt.Errorf("source directory is empty: %s", sourceDir)
-				}
-				randomFile := files[rand.Intn(len(files))].Name()
-				inputPath := fmt.Sprintf("%s/%s", sourceDir, randomFile)
-				fmt.Printf("Processing source image: %s\n", inputPath)
-				err = doGen(inputPath, outputPath, width, height)
-				if err != nil {
-					return fmt.Errorf("failed to generate image from source: %v", err)
-				}
-			} else {
-				// 生成随机图片
-				fmt.Printf("Generating random image: %s\n", outputPath)
-				if err := genRandomImage(outputPath, width, height); err != nil {
-					return fmt.Errorf("failed to generate random image: %v", err)
-				}
+			outputPath := fmt.Sprintf("%s/%s", outputDir, f.Name())
+			inputPath := fmt.Sprintf("%s/%s", sourceDir, f.Name())
+			// fmt.Printf("Processing source image: %s\n", inputPath)
+			err = resizeImage(inputPath, outputPath, randWidth(width), randWidth(height))
+			if err != nil {
+				return fmt.Errorf("failed to generate image from source: %v", err)
 			}
 		}
-		fmt.Printf("Successfully generated %d random images in directory: %s\n", count, outputDir)
+		fmt.Printf("Successfully generated %d random images in directory: %s\n", len(files), outputDir)
 
 		return nil
 	},
 }
 
-func doGen(inputPath string, outputPath string, targetWidth, targetHeight int) error {
+func randWidth(in int) int {
+	// 生成一个随机宽度，范围在原始宽度的±50%之间
+	min := in - in/2
+	max := in + in/2
+	return rand.Intn(max-min+1) + min
+}
+
+func resizeImage(inputPath, outputPath string, targetWidth, targetHeight int) error {
 	// 打开原始图片
 	file, err := os.Open(inputPath)
 	if err != nil {
@@ -134,8 +133,8 @@ func doGen(inputPath string, outputPath string, targetWidth, targetHeight int) e
 
 	// 获取原始图片尺寸
 	bounds := img.Bounds()
-	origWidth, origHeight := bounds.Dx(), bounds.Dy()
-	fmt.Printf("原始图片尺寸: %dx%d\n", origWidth, origHeight)
+	// origWidth, origHeight := bounds.Dx(), bounds.Dy()
+	// fmt.Printf("原始图片尺寸: %dx%d\n", origWidth, origHeight)
 
 	// 创建中间图像，应用变换（添加随机噪声）
 	intermediateImg := image.NewRGBA(bounds)
